@@ -49,6 +49,9 @@
 <!-- 聊天容器：扫码进入即全屏对话框 -->
 <div id="chat-bot"></div>
 
+<!-- 调试：显示本设备 ID（确认每设备独立后删除） -->
+<div id="debugUid" style="position:fixed;top:4px;right:8px;z-index:9999;font-size:11px;color:#888;background:rgba(255,255,255,.7);padding:2px 6px;border-radius:4px;">读取中…</div>
+
 <!-- ============================================================
      扣子 Chat SDK 官方安装代码（官方版 · 全屏对话框直入）
      配置要点：
@@ -78,14 +81,20 @@
   }
   var deviceUserId = getDeviceUserId();
 
+  // ★ 调试显示：本机设备 ID（两台手机对照是否不同；确认后删掉这段）
+  setTimeout(function () {
+    var dbg = document.getElementById('debugUid');
+    if (dbg) dbg.textContent = '本设备ID: ' + deviceUserId;
+  }, 500);
+
   var cozeClient = new CozeWebSDK.WebChatClient({
     config: {
       bot_id: '7688579753414492169',      // 你的智能体 ID
       isIframe: false,                     // 非 iframe：规避小程序 webview 域名限制
-      userInfo: {
-        id: deviceUserId,                  // ★ 每台设备唯一的用户 ID
-        nickname: '游客',
-      },
+    },
+    userInfo: {
+      id: deviceUserId,                    // ★ 每台设备唯一的用户 ID（顶层，SDK 从 options.userInfo 读取）
+      nickname: '游客',
     },
     ui: {
       base: { lang: 'zh-CN' },
