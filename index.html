@@ -61,10 +61,31 @@
   // ★★★ 你的 PAT（已填好）★★★
   var MY_PAT = 'pat_aGCsh57A0WKryaYeEu1p0Ns3ksndNBFiFOj0bP08Lni6yu6CEzg2Z0dOantQAGkN';
 
+  // ★★★ 每个设备独立且持久的用户 ID ★★★
+  // 首次访问生成一个随机 ID 存进浏览器 localStorage；
+  // 之后每次打开都复用同一个 ID → 同一设备始终是同一个对话，刷新/重进不丢记录；
+  // 不同设备 ID 不同 → 各自的对话互不影响。
+  function getDeviceUserId() {
+    var key = 'coze_device_user_id_v1';
+    var id = null;
+    try { id = localStorage.getItem(key); } catch (e) {}
+    if (!id) {
+      // 生成 15 位数字字符串（Coze user_id 需为数字串）
+      id = String(Date.now()).slice(-9) + String(Math.floor(Math.random() * 1000000)).padStart(6, '0');
+      try { localStorage.setItem(key, id); } catch (e) {}
+    }
+    return id;
+  }
+  var deviceUserId = getDeviceUserId();
+
   var cozeClient = new CozeWebSDK.WebChatClient({
     config: {
       bot_id: '7688579753414492169',      // 你的智能体 ID
       isIframe: false,                     // 非 iframe：规避小程序 webview 域名限制
+      userInfo: {
+        id: deviceUserId,                  // ★ 每台设备唯一的用户 ID
+        nickname: '游客',
+      },
     },
     ui: {
       base: { lang: 'zh-CN' },
