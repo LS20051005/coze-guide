@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>古建筑智能导游（官方版）</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  body { background: #f0f2f5; overflow: hidden; }
+
+  /* 聊天容器：占满整个页面 —— 扫码进来直接就是对话框 */
+  #chat-bot {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    width: 100%;
+    height: 100%;
+  }
+  /* Chat SDK 内嵌时聊天框占满宿主元素 */
+  #chat-bot > div { width: 100% !important; height: 100% !important; }
+
+  /* 加载期提示 */
+  #loading {
+    position: fixed; inset: 0; z-index: 1;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: #f0f2f5; color: #6b7280;
+    font-size: 15px; gap: 12px;
+    transition: opacity .4s;
+  }
+  #loading .spinner {
+    width: 34px; height: 34px;
+    border: 3px solid #dce7e0;
+    border-top-color: #1e6f50;
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loading .load-title { font-weight: 600; color: #1e6f50; }
+</style>
+</head>
+<body>
+<!-- 加载提示（SDK 就绪后隐藏） -->
+<div id="loading">
+  <div class="spinner"></div>
+  <div class="load-title">正在加载对话…</div>
+</div>
+
+<!-- 聊天容器：扫码进入即全屏对话框 -->
+<div id="chat-bot"></div>
+
+<!-- ============================================================
+     扣子 Chat SDK 官方安装代码（官方版 · 全屏对话框直入）
+     配置要点：
+       - ui.chatBot.el   → 聊天框直接内嵌到 #chat-bot，占满全屏
+       - ui.asstBtn      → 不显示悬浮球（已内嵌全屏）
+       - showChatBot()   → 确保进入页面即显示聊天框
+     ============================================================ -->
+<script src="https://lf-cdn.coze.cn/obj/unpkg/flow-platform/chat-app-sdk/1.2.0-beta.19/libs/cn/index.js"></script>
+<script>
+  // ★★★ 你的 PAT（已填好）★★★
+  var MY_PAT = 'pat_aGCsh57A0WKryaYeEu1p0Ns3ksndNBFiFOj0bP08Lni6yu6CEzg2Z0dOantQAGkN';
+
+  var cozeClient = new CozeWebSDK.WebChatClient({
+    config: {
+      bot_id: '7688579753414492169',      // 你的智能体 ID
+      isIframe: false,                     // 非 iframe：规避小程序 webview 域名限制
+    },
+    ui: {
+      base: { lang: 'zh-CN' },
+      header: {
+        isShow: true,                       // 显示标题栏
+        isNeedClose: false,                 // 全屏态不需要关闭按钮
+      },
+      footer: { isShow: false },            // 隐藏底部 Coze 文案
+      asstBtn: { isNeed: false },           // 不显示悬浮球（聊天框已全屏内嵌）
+      chatBot: {
+        el: document.getElementById('chat-bot'),  // ★ 内嵌到全屏容器
+        title: '古建筑智能导游',
+        uploadable: true,                    // 允许上传图片（识别构件必需）
+        isNeedAudio: true,                   // ✅ 开启语音输入
+        isNeedQuote: true,
+        isNeedFunctionCallMessage: false,
+      },
+    },
+    auth: {
+      type: 'token',
+      token: MY_PAT,
+      onRefreshToken: function () {
+        return MY_PAT;
+      },
+    },
+  });
+
+  // 确保进入页面即显示聊天框（防止默认隐藏）
+  setTimeout(function () {
+    try { cozeClient && cozeClient.showChatBot && cozeClient.showChatBot(); } catch (e) {}
+    var load = document.getElementById('loading');
+    if (load) load.style.display = 'none';
+  }, 800);
+</script>
+
+<!-- SDK 加载失败提示 -->
+<script>
+  setTimeout(function () {
+    if (typeof CozeWebSDK === 'undefined' || !window.CozeWebSDK) {
+      document.getElementById('loading').innerHTML =
+        '<div style="text-align:center;line-height:2;color:#b91c1c;font-size:14px;padding:0 20px;">' +
+        '⚠️ Chat SDK 脚本加载失败<br>' +
+        '<span style="color:#6b7280;font-size:13px;">请检查网络，或到扣子开放平台 Chat SDK 文档页复制最新 &lt;script&gt; 地址替换。</span></div>';
+    }
+  }, 6000);
+</script>
+</body>
+</html>
