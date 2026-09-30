@@ -50,12 +50,42 @@ body{background:#f0f2f5;overflow:hidden}
 <div class="toast" id="toast"></div>
 
 <script>
-// ===== 页面级错误捕获与状态条：任何 JS 错误都会显示在页面底部红条，无需打开控制台 =====
+// ===== 页面级错误捕获与调试条：右小角，默认折叠成一行不挡界面；点击展开；✕ 可关闭 =====
 function dbg(m){
   try{
     var d=document.getElementById('dbgbar');
-    if(!d){d=document.createElement('div');d.id='dbgbar';d.style.cssText='position:fixed;left:0;right:0;bottom:0;background:#a00;color:#fff;font:11px/1.5 monospace;z-index:999999;padding:4px 8px;white-space:pre-wrap;max-height:30vh;overflow:auto';document.body.appendChild(d);}
-    d.textContent=(d.textContent?d.textContent+'\n':'')+new Date().toTimeString().slice(0,8)+' | '+m;
+    if(!d){
+      d=document.createElement('div');
+      d.id='dbgbar';
+      d.setAttribute('data-open','0');
+      d.style.cssText='position:fixed;right:8px;bottom:8px;z-index:999999;background:rgba(190,30,30,.94);color:#fff;font:11px/1.5 monospace;padding:3px 8px;border-radius:6px;max-width:72vw;white-space:pre-wrap;max-height:2.1em;overflow:hidden;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.35)';
+      d.setAttribute('title','调试日志：点击展开/折叠');
+      d.addEventListener('click',function(){
+        if(d.getAttribute('data-open')==='1'){d.setAttribute('data-open','0');d.style.maxHeight='2.1em';d.style.overflow='hidden';}
+        else{d.setAttribute('data-open','1');d.style.maxHeight='38vh';d.style.overflow='auto';}
+      });
+      var close=document.createElement('span');
+      close.id='dbgx';
+      close.textContent='✕';
+      close.style.cssText='float:right;margin-left:8px;cursor:pointer;font-weight:bold;padding:0 5px;border-radius:4px';
+      close.addEventListener('click',function(ev){
+        ev.stopPropagation();
+        var p=document.getElementById('dbgx');
+        if(p){var bar=p.parentNode;if(bar){bar.style.display='none';}}
+      });
+      d.appendChild(close);
+      document.body.appendChild(d);
+    }
+    var row=document.createElement('div');
+    row.style.cssText='line-height:1.55;padding:1px 0;border-bottom:1px solid rgba(255,255,255,.15)';
+    row.textContent=new Date().toTimeString().slice(0,8)+' | '+m;
+    d.insertBefore(row,document.getElementById('dbgx'));
+    var kids=d.querySelectorAll(':scope > div'),cnt=0;
+    for(var i=0;i<kids.length;i++){if(kids[i]!==document.getElementById('dbgx'))cnt++;}
+    while(cnt>50){
+      var last=d.lastElementChild;
+      if(last&&last!==document.getElementById('dbgx')){d.removeChild(last);cnt--;}else break;
+    }
   }catch(e){}
 }
 window.addEventListener('error',function(e){try{dbg('JS: '+(e.message||'error'))}catch(_){}});
@@ -458,27 +488,222 @@ setTimeout(function(){
 },2000);
 
 var th=false;
+function doInject(){
+  var msgs=findMessages();
+  msgs.forEach(function(row){
+    if(sm){
+      if(row._avTag) return;
+      n++;
+      var r=addCB(row);
+      if(r){r.cb.setAttribute('data-cb','cb'+n);r.del.setAttribute('data-cb','del'+n);cbCount++;rows.push(r)}
+    }
+  });
+  upd();
+}
 function watch(){
   var root=document.getElementById('chat-bot');
   if(!root) return;
   new MutationObserver(function(){
     if(th) return;th=true;
-    setTimeout(function(){
-      th=false;
-      if(sm){
-        var msgs=findMessages();
-        msgs.forEach(function(row){
-          if(row._avTag) return;
-          n++;
-          var r=addCB(row);
-          if(r){r.cb.setAttribute('data-cb','cb'+n);r.del.setAttribute('data-cb','del'+n);cbCount++;rows.push(r)}
-        });
-        upd();
-      }
-    },300);
+    setTimeout(function(){th=false;doInject()},300);
   }).observe(root,{childList:true,subtree:true});
+  setTimeout(doInject,2500);
 }
 setTimeout(watch,2000);
+
+// ===== 隐藏标题栏「古建筑智能导游」最右侧的 SDK 新建会话 ＋ 按钮（与删除/新会话功能重复且无效）=====
+(function(){
+  function hideHeaderPlus(){
+    try{
+      var box=document.getElementById('chat-bot');
+      if(!box)return;
+      var best=null,divs=box.querySelectorAll('div');
+      for(var i=0;i<divs.length;i++){
+        var d=divs[i],t=(d.textContent||'').trim();
+        if(t.indexOf('古建筑智能导游')<0)continue;
+        if(t.length>100)continue;
+        var bs=d.querySelectorAll('button,[role="button"],[class*="icon-button"]');
+        if(bs.length&&(!best||d.textContent.length<best.el.textContent.length))best={el:d,bs:bs};
+      }
+      if(!best)return;
+      var last=best.bs[best.bs.length-1];
+      if(last&&!last.dataset.vh){last.dataset.vh='1';last.style.display='none';}
+      // 兜底：标题行内任何图标形如"M13.4997…"（新建会话方框＋）都隐藏
+      for(var j=0;j<best.bs.length;j++){
+        var b=best.bs[j];
+        if(b.dataset.vh)continue;
+        var svs=b.querySelectorAll('svg');
+        for(var k=0;k<svs.length;k++){
+          var p=svs[k].querySelector('path');
+          if(p&&(p.getAttribute('d')||'').indexOf('M13.4997')===0){b.dataset.vh='1';b.style.display='none';break;}
+        }
+      }
+    }catch(e){}
+  }
+  try{
+    new MutationObserver(hideHeaderPlus).observe(document.getElementById('chat-bot'),{childList:true,subtree:true});
+  }catch(e){}
+  setTimeout(hideHeaderPlus,1000);
+  setInterval(hideHeaderPlus,1500);
+})();
+
+// ===== 方案B：接管官方朗读按钮 → 我们的播放器（断点/从头/继续）=====
+// 语音源：CLOUD_TTS 填了=云端火山TTS（音质好、跨设备一致）；留空=浏览器中文语音
+var CLOUD_TTS='';
+function guideMsgText(row){
+  var txt='';
+  try{
+    var el=row.querySelector('[class*="flow-markdown-body"]')||row.querySelector('[class*="text-content"]')||row.querySelector('[class*="coz-fg-primary"]');
+    txt=(el||row).textContent||'';
+  }catch(e){txt=(row.textContent||'');}
+  txt=txt.replace(/```[\s\S]*?```/g,' ').replace(/!\[[^\]]*\]\([^)]*\)/g,' ')
+     .replace(/\[([^\]]*)\]\([^)]*\)/g,'$1').replace(/[#*`>|~_\-]{2,}/g,' ').replace(/\s+/g,' ').trim();
+  return txt;
+}
+function guideSplit(t){
+  var out=[],cur='';
+  for(var i=0;i<t.length;i++){var ch=t.charAt(i);cur+=ch;if('。！？；：\n'.indexOf(ch)>-1){var p=cur.trim();if(p)out.push(p);cur='';}}
+  var p=cur.trim();if(p)out.push(p);
+  if(!out.length&&t.trim())out=[t.trim()];
+  return out;
+}
+// 标准普通话语音优选：排除粤/闽/港/台/方言，优先 zh-CN + 标准音色名（晓晓/云希/晓涵…）
+function pickGuideVoice(){
+  try{
+    var vs=window.speechSynthesis.getVoices();
+    if(!vs||!vs.length)return null;
+    var cn=[],other=[];
+    for(var i=0;i<vs.length;i++){
+      var v=vs[i],L=(v.lang||'').toLowerCase(),N=(v.name||'').toLowerCase();
+      if(L.indexOf('zh')!==0)continue;
+      if(/hk|tw|yue|粤|闽|沪|四川|山东|山東|东北|方言|hakka|cantonese/i.test(L+N))continue;
+      if(L==='zh'||L.indexOf('zh-cn')===0||L.indexOf('zh_cn')===0)cn.push(v);else other.push(v);
+    }
+    var pool=cn.length?cn:other;
+    var order=['xiaoxiao','xiaoyi','xiaohan','yunxi','yunyang','yaoyao','tingting','huihui','sanny','lili','female','natural','online'];
+    for(var k=0;k<order.length;k++){
+      for(var j=0;j<pool.length;j++){
+        if(pool[j].name.toLowerCase().indexOf(order[k])>-1)return pool[j];
+      }
+    }
+    return pool.length?pool[0]:null;
+  }catch(e){return null;}
+}
+var P={mode:'web',state:'idle',row:null,btn:null,blocks:[],idx:0,audio:null,pos:0,dur:0,pend:0};
+// 进度/状态提示条（防止用户以为没反应反复点击）
+function stateToast(txt){
+  var t=document.getElementById('rdstate');
+  if(!t){
+    t=document.createElement('div');
+    t.id='rdstate';
+    t.style.cssText='position:fixed;left:50%;top:36%;transform:translateX(-50%);z-index:999999;background:rgba(30,111,80,.95);color:#fff;font:15px/1.7 sans-serif;padding:9px 18px;border-radius:10px;box-shadow:0 4px 14px rgba(0,0,0,.3);text-align:center;pointer-events:none;max-width:80vw';
+    document.body.appendChild(t);
+  }
+  t.textContent=txt;
+  t.style.display='block';
+  clearTimeout(t._t);
+  t._t=setTimeout(function(){t.style.display='none'},3000);
+}
+function pStop(){
+  try{if(P.mode==='cloud'&&P.audio){P.audio.pause();}}catch(e){}
+  try{window.speechSynthesis&&window.speechSynthesis.cancel();}catch(e){}
+  if(P.state==='playing'){P.state='stopped';stateToast('⏸ 已暂停，再次点击可从头/继续');}
+}
+function pStep(){
+  if(P.state!=='playing')return;
+  var b=P.blocks[P.idx];
+  if(!b){P.state='done';P.row=null;return;}
+  var u=new SpeechSynthesisUtterance(b);
+  u.lang='zh-CN';u.rate=1.0;
+  var gv=pickGuideVoice();if(gv){u.voice=gv;}
+  u.onend=function(){if(P.state!=='playing')return;P.idx++;pStep();};
+  u.onerror=function(){if(P.state==='playing')P.state='done';};
+  try{window.speechSynthesis.speak(u)}catch(e){P.state='done';}
+}
+function pPlayWeb(from){P.state='playing';P.idx=from;pStep();}
+function pPlayCloud(from){
+  if(!P.audio)return;
+  try{P.audio.currentTime=from;}catch(e){}
+  P.pos=from;P.state='playing';
+  P.audio.play();
+}
+function pShowMenu(btn){
+  var m=document.getElementById('rdmenu');
+  if(!m){
+    m=document.createElement('div');
+    m.id='rdmenu';
+    m.style.cssText='position:fixed;z-index:999999;background:#fff;border:1px solid #ddd;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.18);padding:6px;display:none;font-family:inherit';
+    m.innerHTML='<button data-a="restart" style="display:flex;width:100%;align-items:center;gap:6px;border:none;background:transparent;padding:8px 10px;border-radius:8px;font-size:14px;cursor:pointer;color:#222">🔁 从头播放</button><button data-a="resume" style="display:flex;width:100%;align-items:center;gap:6px;border:none;background:transparent;padding:8px 10px;border-radius:8px;font-size:14px;cursor:pointer;color:#222">⏯ 继续播放</button>';
+    m.addEventListener('click',function(e){
+      var a=e.target&&e.target.getAttribute&&e.target.getAttribute('data-a');
+      if(!a)return;
+      m.style.display='none';
+      if(!P.row)return;
+      P.pend=Date.now();                       // 防连点：2.5s 内忽略再次点按钮
+      if(P.mode==='cloud'){
+        if(a==='restart'){stateToast('⏳ 正在从头播放，请稍候…');pPlayCloud(0);}
+        else{
+          var pc=P.dur?Math.min(100,Math.round((P.pos||0)/P.dur*100)):'';
+          stateToast('⏳ 正在从 '+(P.dur?('约 '+pc+'%'):('已读 '+Math.round(P.pos||0)+' 秒'))+' 处继续，请稍候…');
+          pPlayCloud(P.pos||0);
+        }
+      }else{
+        if(a==='restart'){stateToast('⏳ 正在从头播放…');pPlayWeb(0);}
+        else{
+          var idx=Math.min((P.idx||0),P.blocks.length-1);
+          stateToast('⏳ 正在从第 '+(idx+1)+' / '+P.blocks.length+' 句继续，请稍候…');
+          pPlayWeb(P.idx||0);
+        }
+      }
+    });
+    document.body.appendChild(m);
+  }
+  if(!btn)return;
+  var r=btn.getBoundingClientRect();
+  m.style.display='block';m.style.left=Math.max(4,r.left)+'px';m.style.top=(r.bottom+6)+'px';
+}
+function pStart(row,btn){
+  var txt=guideMsgText(row),blocks=guideSplit(txt);
+  if(!txt||!blocks.length)return;
+  P.row=row;P.btn=btn;P.blocks=blocks;P.idx=0;P.pos=0;P.dur=0;
+  if(CLOUD_TTS&&CLOUD_TTS){
+    P.mode='cloud';
+    stateToast('⏳ 正在合成语音，请稍候…');
+    fetch(CLOUD_TTS,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:txt})})
+      .then(function(r){return r.json()})
+      .then(function(j){
+        if(!j||!j.audio_url){P.mode='web';stateToast('🔊 正在朗读…');pPlayWeb(0);return;}
+        var a=new Audio(j.audio_url);
+        a.addEventListener('loadedmetadata',function(){P.dur=a.duration||0;});
+        a.addEventListener('timeupdate',function(){if(!a.paused)P.pos=a.currentTime||0;});
+        a.addEventListener('ended',function(){P.state='done';});
+        a.addEventListener('error',function(){P.mode='web';stateToast('🔊 正在朗读…');pPlayWeb(P.idx||0);});
+        P.audio=a;
+        stateToast('🔊 正在朗读…');
+        pPlayCloud(0);
+      })
+      .catch(function(){P.mode='web';stateToast('🔊 正在朗读…');pPlayWeb(0);});
+  }else{
+    P.mode='web';stateToast('🔊 正在朗读…');pPlayWeb(0);
+  }
+}
+document.addEventListener('click',function(e){
+  try{
+    var mm=document.getElementById('rdmenu');
+    if(mm&&mm.style.display==='block'&&!(e.target&&e.target.closest&&e.target.closest('#rdmenu'))){mm.style.display='none';}
+    if(P.pend&&Date.now()-P.pend<2500)return;      // 菜单选完后防连点
+    var btn=e.target&&e.target.closest?e.target.closest('.coze-chat-message-wrapper button'):null;
+    if(!btn)return;
+    var sv=btn.querySelector('svg');
+    if(sv&&sv.querySelector('path'))return;            // 有图标的按钮（复制等）不接管
+    var row=btn.closest('.coze-chat-message-wrapper');
+    e.preventDefault();e.stopPropagation();            // 接管官方动作
+    if(P.row===row&&P.state==='playing'){pStop();return;}       // 播放中 → 停止记断点
+    if(P.row===row&&P.state==='stopped'&&(P.blocks.length||P.audio)){pShowMenu(btn);return;} // 已停 → 从头/继续
+    P.state='idle';
+    pStart(row,btn);
+  }catch(err){}
+},true);
 
 setTimeout(function(){
   if(typeof CozeWebSDK==='undefined'||!window.CozeWebSDK){
@@ -604,6 +829,46 @@ if(location.search.indexOf('selftest=6')>-1){
       })
       .catch(function(e){out.push('\nAPI 请求失败: '+(e&&e.message?e.message:e));showOut(out)});
   },12000);
+}
+
+// ===== 诊断模式 ?selftest=8：扫描含隐藏操作条在内的全部按钮/图标（完整 svg path + 父链），定位官方朗读按钮 =====
+if(location.search.indexOf('selftest=8')>-1){
+  setTimeout(function(){
+    try{
+      var out=[];
+      function dump(el,label){
+        var svg=el.querySelector('svg'),svgInfo='';
+        if(svg){
+          var v=svg.getAttribute('viewBox')||'';
+          var allD='';
+          var ps=svg.querySelectorAll('path');
+          for(var q=0;q<ps.length;q++){allD+=(ps[q].getAttribute('d')||'');}
+          allD=allD.slice(0,160);
+          svgInfo=' | svb='+v+' svd="'+allD+'"';
+        }
+        var chain='';
+        try{
+          var anc=[],pp=el;
+          for(var z=0;z<5&&pp;z++){anc.push(String(pp.className||'').slice(0,45));pp=pp.parentElement;}
+          chain=' anc='+anc.join(' > ');
+        }catch(e){}
+        var xy='?';
+        try{var b=el.getBoundingClientRect();xy=Math.round(b.left)+','+Math.round(b.top);}catch(e){}
+        out.push(label+' <'+el.tagName+'> '+String(el.className||'').slice(0,90)+' | xy='+xy+svgInfo+chain);
+      }
+      var all=document.querySelectorAll('#chat-bot button,#chat-bot [role="button"],#chat-bot [class*="icon-button"],[class*="operation"],[class*="action-bar"],[class*="hover"]');
+      for(var i=0;i<all.length;i++){dump(all[i],'['+i+']');}
+      var lab=document.createElement('pre');
+      lab.style.cssText='position:fixed;left:0;right:0;top:10px;max-height:70vh;overflow:auto;background:#000;color:#0ff;font:11px/1.3 monospace;z-index:999999;padding:8px;white-space:pre;border-bottom:2px solid #0ff';
+      lab.textContent='=== 全部按钮/图标(含隐藏操作条) ('+all.length+') ===\n'+out.join('\n');
+      document.body.appendChild(lab);
+    }catch(e){
+      var lab=document.createElement('pre');
+      lab.style.cssText='position:fixed;top:10px;left:0;right:0;background:#a00;color:#fff;z-index:999999;padding:6px;font:12px monospace';
+      lab.textContent='[selftest=8] 出错: '+e.message;
+      document.body.appendChild(lab);
+    }
+  },7000);
 }
 </script>
 </body>
