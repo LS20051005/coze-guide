@@ -47,35 +47,13 @@ body{background:#f0f2f5;overflow:hidden}
 var PAT='pat_aGCsh57A0WKryaYeEu1p0Ns3ksndNBFiFOj0bP08Lni6yu6CEzg2Z0dOantQAGkN',BOT='7688579753414492169';
 function did(){var k='coze_uid_v2',v=null;try{v=localStorage.getItem(k)}catch(e){}if(!v){v=String(Date.now()).slice(-9)+String(Math.floor(Math.random()*1e6)).padStart(6,'0');try{localStorage.setItem(k,v)}catch(e){}}return v}
 function showFail(msg){var l=document.getElementById('loading');if(l){l.style.display='flex';l.innerHTML='<div style="text-align:center;line-height:2;color:#b91c1c;font-size:14px;padding:0 20px">SDK 加载失败<br><span style="color:#6b7280;font-size:13px">'+msg+'</span></div>'}}
-function ensureDev(cb){
-  var dev='';try{dev=localStorage.getItem('coze_dev_conv_v2')||''}catch(e){}
-  if(/^\d{6,}$/.test(dev)){cb(dev);return;}
-  var done=false;
-  function fin(id){if(done)return;done=true;cb(id);}
-  setTimeout(function(){fin('')},4000);   // 4s 超时兜底：新建失败也不让页面卡 loading
-  // 无记录 → 调 Coze API 新建会话（本设备专属），避免恢复别的设备的历史
-  try{
-    fetch('https://api.coze.cn/v1/conversation/create',{method:'POST',headers:{'Authorization':'Bearer '+PAT,'Content-Type':'application/json'},body:'{}'})
-      .then(function(r){return r.json()})
-      .then(function(j){
-        var id=j&&j.data&&j.data.id||'';
-        if(/^\d{6,}$/.test(id)){try{localStorage.setItem('coze_dev_conv_v2',id)}catch(e){}}
-        fin(id);
-      })
-      .catch(function(){fin('')});
-  }catch(e){fin('')}
-}
 function initChat(){
   try{
     window.__CHAT_INIT=1;
     var uid=did();
-    ensureDev(function(dev){
-      var _cfg={bot_id:BOT};
-      if(/^\d{6,}$/.test(dev))_cfg.conversation_id=dev;   // 有本设备会话则直连
-      var sdk=new CozeWebSDK.WebChatClient({config:_cfg,userInfo:{id:uid,nickname:'游客'},ui:{base:{lang:'zh-CN'},header:{isShow:true},footer:{isShow:false},asstBtn:{isNeed:false},chatBot:{el:document.getElementById('chat-bot'),title:'古建筑智能导游',uploadable:true,isNeedAudio:true,isNeedQuote:true,isNeedFunctionCallMessage:false}},auth:{type:'token',token:PAT,onRefreshToken:function(){return PAT}}});
-      window.sdk=sdk;
-      setTimeout(function(){try{sdk.showChatBot()}catch(e){}var l=document.getElementById('loading');if(l)l.style.display='none'},800);
-    });
+    var sdk=new CozeWebSDK.WebChatClient({config:{bot_id:BOT},userInfo:{id:uid,nickname:'游客'},ui:{base:{lang:'zh-CN'},header:{isShow:true},footer:{isShow:false},asstBtn:{isNeed:false},chatBot:{el:document.getElementById('chat-bot'),title:'古建筑智能导游',uploadable:true,isNeedAudio:true,isNeedQuote:true,isNeedFunctionCallMessage:false}},auth:{type:'token',token:PAT,onRefreshToken:function(){return PAT}}});
+    window.sdk=sdk;
+    setTimeout(function(){try{sdk.showChatBot()}catch(e){}var l=document.getElementById('loading');if(l)l.style.display='none'},800);
   }catch(e){showFail('初始化异常')}
 }
 if(window.CozeWebSDK){
