@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>古建筑智能导游（自研版·按设备区分）</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;background:#f2f4f7;color:#1f2937}
+#app{display:flex;flex-direction:column;height:100%;max-width:760px;margin:0 auto;background:#f7f9fb}
+.header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#1e6f50;color:#fff;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.bot-name{font-size:20px;font-weight:700}
+.bot-tag{font-size:12px;opacity:.85;margin-top:2px}
+.messages{flex:1;overflow-y:auto;padding:16px 14px;display:flex;flex-direction:column;gap:14px}
+.msg{display:flex;flex-direction:column;max-width:88%}
+.msg.user{align-self:flex-end;align-items:flex-end}
+.msg.assistant{align-self:flex-start;align-items:flex-start}
+.bubble{padding:12px 16px;border-radius:16px;font-size:17px;line-height:1.8;word-break:break-word;overflow-wrap:anywhere}
+.msg.user .bubble{background:#1e6f50;color:#fff;border-bottom-right-radius:6px}
+.msg.assistant .bubble{background:#fff;border:1px solid #e3e8ee;border-bottom-left-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+.bubble img{max-width:100%;border-radius:10px;margin:6px 0;display:block;cursor:pointer}
+.bubble p{margin:6px 0}
+.bubble p:first-child{margin-top:0}.bubble p:last-child{margin-bottom:0}
+.bubble h1,.bubble h2,.bubble h3,.bubble h4{margin:10px 0 6px;color:#1e6f50;line-height:1.5}
+.bubble ul,.bubble ol{margin:6px 0 6px 24px}.bubble li{margin:4px 0}
+.bubble code{background:#eef1f5;padding:1px 6px;border-radius:5px;font-size:15px}
+.typing{display:inline-flex;gap:5px;padding:4px 0}
+.typing span{width:8px;height:8px;background:#9ca3af;border-radius:50%;animation:blink 1.2s infinite}
+.typing span:nth-child(2){animation-delay:.2s}.typing span:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
+.input-bar{display:flex;align-items:center;gap:8px;padding:10px 12px 14px;border-top:2px solid #e0e6ec;background:#fff;flex-shrink:0}
+.btn-upload{display:flex;align-items:center;gap:5px;background:#fff;border:2px solid #1e6f50;color:#1e6f50;border-radius:12px;padding:10px 12px;cursor:pointer;flex-shrink:0;font-size:15px;font-weight:700}
+.btn-upload:active{background:#e8f3ec}
+.input-wrap{flex:1;border:2px solid #c9d2dc;border-radius:14px;background:#f7f9fb;padding:6px 12px;display:flex;align-items:center}
+.input-wrap:focus-within{border-color:#1e6f50}
+#inputText{width:100%;border:none;outline:none;background:transparent;font-size:18px;font-family:inherit;resize:none;max-height:110px;line-height:1.6}
+.btn-send{background:#1e6f50;color:#fff;border:none;border-radius:14px;padding:13px 18px;font-size:18px;font-weight:700;cursor:pointer;flex-shrink:0}
+.btn-send:disabled{opacity:.45;cursor:not-allowed}
+.img-preview{position:fixed;inset:0;background:rgba(0,0,0,.78);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:100;padding:20px}
+#imgPreview[hidden]{display:none!important}
+.img-preview img{max-width:92%;max-height:60%;border-radius:12px;box-shadow:0 6px 30px rgba(0,0,0,.4)}
+.preview-actions{display:flex;gap:14px}
+.btn{border:none;border-radius:12px;padding:13px 22px;font-size:18px;font-weight:700;cursor:pointer}
+.btn-primary{background:#1e6f50;color:#fff}
+.btn-danger{background:#e5e7eb;color:#374151}
+.tip{position:fixed;left:50%;top:12px;transform:translateX(-50%);background:rgba(0,0,0,.78);color:#fff;padding:7px 14px;border-radius:9px;font-size:13px;z-index:99;display:none}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="header">
+    <div>
+      <div class="bot-name">古建筑智能导游</div>
+      <div class="bot-tag">自研版 · 各设备历史独立</div>
+    </div>
+  </header>
+  <main id="msgs" class="messages"></main>
+  <footer class="input-bar">
+    <label class="btn-upload" for="fileInput"><span>📷</span><span>照片</span></label>
+    <input type="file" id="fileInput" accept="image/*" hidden>
+    <div class="input-wrap"><textarea id="inputText" rows="1" placeholder="打字提问…（可带照片）"></textarea></div>
+    <button class="btn-send" id="btnSend">发送</button>
+  </footer>
+</div>
+<div id="imgPreview" class="img-preview" hidden>
+  <img id="previewImg" alt="预览">
+  <div class="preview-actions"><button id="previewRemove" class="btn btn-danger">✕ 移除</button><button id="previewConfirm" class="btn btn-primary">✓ 就用这张</button></div>
+</div>
+<div class="tip" id="tip"></div>
+<script>
+'use strict';
+var PAT='pat_aGCsh57A0WKryaYeEu1p0Ns3ksndNBFiFOj0bP08Lni6yu6CEzg2Z0dOantQAGkN',BOT='7688579753414492169';
+var BASE='https://api.coze.cn';
+var KEY='coze_conv_v2';                 // 本设备专属会话 ID（各设备互不共享）
+var msgs=document.getElementById('msgs'),input=document.getElementById('inputText'),sendBtn=document.getElementById('btnSend'),tip=document.getElementById('tip');
+var elFile=document.getElementById('fileInput'),elPreview=document.getElementById('imgPreview'),elPrevImg=document.getElementById('previewImg');
+var elPrevRemove=document.getElementById('previewRemove'),elPrevConfirm=document.getElementById('previewConfirm');
+var sending=false;
+var pendingImg=null,pendingMime=null,pendingImgSmall='';   // 待发送图片（原图base64 / mime / 压缩缓存图）
+
+function toast(t){tip.textContent=t;tip.style.display='block';clearTimeout(tip._t);tip._t=setTimeout(function(){tip.style.display='none'},3000)}
+function getConv(){try{return localStorage.getItem(KEY)||''}catch(e){return ''}}
+function setConv(v){try{localStorage.setItem(KEY,v)}catch(e){}}
+// 本设备本地历史（兜底：保证完整讲解与标注图刷新后不丢）
+var HIST='coze_hist_v2';
+function histGet(){try{return JSON.parse(localStorage.getItem(HIST)||'[]')}catch(e){return []}}
+function histPush(it){var a=histGet();a.push(it);if(a.length>40)a=a.slice(-40);try{localStorage.setItem(HIST,JSON.stringify(a))}catch(e){}}
+function extractReply(reply){
+  var text='',img='',c=reply;
+  if(typeof c==='string'){try{c=JSON.parse(c)}catch(e){}}
+  if(Array.isArray(c)){c.forEach(function(p){if(p.type==='text')text+=(text?'\n':'')+(p.text||'');if(p.type==='image'&&p.file_url)img=p.file_url;});}
+  else text=String(c||'');
+  return {text:text,img:img};
+}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function did(){var k='coze_uid_v2',v=null;try{v=localStorage.getItem(k)}catch(e){}if(!v){v=String(Date.now()).slice(-9)+String(Math.floor(Math.random()*1e6)).padStart(6,'0');try{localStorage.setItem(k,v)}catch(e){}}return v}
+
+function md(s){
+  s=esc(s);
+  s=s.replace(/\*\*([^*\n]+)\*\*/g,'<strong>$1</strong>');
+  s=s.replace(/\*([^*\n]+)\*/g,'<em>$1</em>');
+  s=s.replace(/^#{3,6}\s+(.*)$/gm,'<h4>$1</h4>');
+  s=s.replace(/^##\s+(.*)$/gm,'<h3>$1</h3>');
+  s=s.replace(/^#\s+(.*)$/gm,'<h2>$1</h2>');
+  s=s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g,'<img src="$2" alt="$1" loading="lazy">');
+  s=s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+  s=s.replace(/`([^`\n]+)`/g,'<code>$1</code>');
+  s=s.replace(/^\s*[-*+]\s+(.*)$/gm,'<li>$1</li>');
+  s=s.replace(/(<li>[\s\S]*?<\/li>)/g,'<ul>$1</ul>');
+  s=s.replace(/\n{2,}/g,'</p><p>').replace(/\n/g,'<br>');
+  s=s.replace(/^(?!<(p|ul|li|h[1-4]|pre|img|br|a|strong|em))(.+)$/gm,'<p>$2</p>');
+  s=s.replace(/<p>(<br>)+/g,'<p>');
+  return s;
+}
+
+function addMsg(role,html){
+  var w=document.createElement('div');w.className='msg '+role;
+  var b=document.createElement('div');b.className='bubble';b.innerHTML=html;
+  w.appendChild(b);msgs.appendChild(w);msgs.scrollTop=msgs.scrollHeight;
+}
+function addTyping(){var w=document.createElement('div');w.className='msg assistant';w.id='typing';w.innerHTML='<div class="bubble"><span class="typing"><span></span><span></span><span></span></span></div>';msgs.appendChild(w);msgs.scrollTop=msgs.scrollHeight}
+function rmTyping(){var t=document.getElementById('typing');if(t)t.remove()}
+
+function contentToHtml(content){
+  if(!content)return '';
+  var c=content;
+  if(typeof c==='string'){try{c=JSON.parse(c)}catch(e){}}
+  if(Array.isArray(c)){return c.map(function(p){if(p.type==='text')return md(p.text||'');if(p.type==='image')return '<img src="'+((p.file_url)||('__img__'+(p.file_id||'')+'__'))+'" alt="图片">';return ''}).join('')}
+  return md(String(c));
+}
+// 图片 file_id → 可显示图（依次尝试 v3/v1 content，失败才提示）
+function resolveImgs(root){
+  (root||document).querySelectorAll('img[src^="__img__"]').forEach(function(im){
+    var fid=im.getAttribute('src').slice(7,-2);
+    var urls=[BASE+'/v3/files/'+encodeURIComponent(fid)+'/content',BASE+'/v1/files/'+encodeURIComponent(fid)+'/content'];
+    (function tryNext(i){
+      if(i>=urls.length){im.outerHTML='<i>（图片加载失败）</i>';return}
+      fetch(urls[i],{headers:{'Authorization':'Bearer '+PAT}})
+        .then(function(r){if(!r.ok)throw 0;return r.blob()})
+        .then(function(b){im.src=URL.createObjectURL(b)})
+        .catch(function(){tryNext(i+1)});
+    })(0);
+  });
+}
+// 左下角状态角标（测试期诊断用，确认后移除；点击可复制）
+var diagEl=document.createElement('div');
+diagEl.id='diagbar';
+diagEl.style.cssText='position:fixed;left:4px;bottom:4px;z-index:9999;background:rgba(0,0,0,.55);color:#fff;font:11px monospace;padding:3px 8px;border-radius:4px;max-width:92vw;user-select:text;-webkit-user-select:text;cursor:pointer';
+diagEl.title='点击复制诊断信息';
+diagEl.addEventListener('click',function(){try{navigator.clipboard.writeText(diagEl.textContent).then(function(){toast('已复制诊断信息')},function(){})}catch(e){}});
+document.body.appendChild(diagEl);
+function diag(s){diagEl.textContent=s}
+// 加载本设备历史（带页面内诊断）
+function loadHistory(){
+  // 先渲染本设备本地历史（顺序=真实对话顺序，完整讲解与图片不丢）
+  histGet().forEach(function(it){
+    var html='';
+    if(it.t)html=md(it.t);
+    if(it.img)html+='<img src="'+it.img+'" alt="图片">';
+    if(!html)html='<i>（图片）</i>';
+    addMsg(it.r==='u'?'user':'assistant',html);
+  });
+  var conv=getConv();
+  if(!conv){diag('无本设备会话 → 显示开场白（本地历史已显示）');showOnboarding();return;}
+  diag('历史请求中… conv='+String(conv).slice(0,12));
+  var done=false;
+  function fin(reason){
+    if(done)return;done=true;
+    if(reason==='timeout'){diag('超时：历史接口未响应');toast('历史加载超时：接口未响应（已按新对话显示）')}
+    resolveImgs();showOnboarding();
+  }
+  setTimeout(function(){fin('timeout')},8000);
+  fetch(BASE+'/v1/conversation/message/list?conversation_id='+encodeURIComponent(conv),{method:'POST',headers:{'Authorization':'Bearer '+PAT,'Content-Type':'application/json'},body:'{}'})
+    .then(function(r){return r.json()})
+    .then(function(j){
+      if(j.code!==0){
+        diag('历史失败 code='+j.code+' '+(j.msg||'')+'（保留会话，重试）');
+        toast('历史加载失败：'+(j.msg||'错误')+'（会话保留，可重试）');
+      } else {
+        var arr=(j&&j.data||[]).slice().sort(function(a,b){return String(a.created_at||'').localeCompare(String(b.created_at||''))});
+        var rendered=0;
+        if(histGet().length===0){   // 有本地历史则以本地顺序为准；无本地才用服务端
+          arr.forEach(function(m){
+            var role=m.role||'',type=m.type||'';
+            if(role!=='user'&&role!=='assistant')return;
+            if(type==='function_call'||type==='function_response'||type==='tool_response')return;
+            var who=(role==='user')?'user':'assistant';
+            var html=contentToHtml(m.content);
+            if(html){addMsg(who,html);rendered++;}
+          });
+        } else {
+          rendered=arr.length;   // 已用本地历史，服务端仅计条数
+        }
+        diag('历史 code=0 条数='+arr.length+' 渲染='+rendered+' ['+arr.map(function(m){return (m.role||'?')+':'+(m.type||'?')}).join(',')+']');
+        if(arr.length===0){toast('本会话暂无历史消息')}
+      }
+      fin();
+    })
+    .catch(function(e){diag('历史异常: '+(e&&e.message?e.message:'网络错误')+'（保留会话）');toast('历史加载异常：'+(e&&e.message?e.message:'网络错误')+'（会话保留，可重试）');fin()});
+}
+// 首次（无历史）显示 Bot 开场白 + 推荐问题
+function showOnboarding(){
+  if(msgs.children.length>0)return;   // 已有历史不重复显示
+  fetch(BASE+'/v1/bots/'+BOT,{headers:{'Authorization':'Bearer '+PAT}})
+    .then(function(r){return r.json()})
+    .then(function(j){
+      var o=j&&j.data&&j.data.onboarding_info;
+      if(!o||!o.prologue)return;
+      addMsg('assistant',md(o.prologue));
+      var qs=o.suggested_questions||[];
+      if(qs.length){
+        var w=document.createElement('div');w.className='msg assistant';
+        qs.forEach(function(q){
+          var b=document.createElement('button');
+          b.textContent=q;
+          b.style.cssText='display:block;margin:5px 0 0;background:#fff;border:1px solid #1e6f50;color:#1e6f50;border-radius:14px;padding:9px 14px;font-size:15px;cursor:pointer;text-align:left';
+          b.addEventListener('click',function(){input.value=q;send()});
+          w.appendChild(b);
+        });
+        msgs.appendChild(w);msgs.scrollTop=msgs.scrollHeight;
+      }
+    })
+    .catch(function(){});
+}
+// 上传图片 → file_id
+function uploadImg(b64,mime){
+  var bytes=atob(b64);var buf=new Uint8Array(bytes.length);
+  for(var i=0;i<bytes.length;i++)buf[i]=bytes.charCodeAt(i);
+  var fd=new FormData();
+  fd.append('file',new Blob([buf],{type:mime}),'pic.'+(mime.split('/')[1]||'png').replace('jpeg','jpg'));
+  return fetch(BASE+'/v1/files/upload',{method:'POST',headers:{'Authorization':'Bearer '+PAT},body:fd})
+    .then(function(r){return r.json()})
+    .then(function(j){if(j.code!==0||!j.data||!j.data.id)throw new Error('图片上传失败: '+(j.msg||''));return j.data.id});
+}
+// 图片压缩（宽≤800 的 JPEG，用于本地历史缓存，控制容量）
+function compressImg(dataUrl){
+  return new Promise(function(res){
+    var im=new Image();
+    im.onload=function(){
+      try{
+        var max=800,scale=1;
+        if(im.width>max||im.height>max)scale=max/Math.max(im.width,im.height);
+        var cv=document.createElement('canvas');cv.width=Math.round(im.width*scale);cv.height=Math.round(im.height*scale);
+        cv.getContext('2d').drawImage(im,0,0,cv.width,cv.height);
+        res(cv.toDataURL('image/jpeg',0.8));
+      }catch(e){res('')}
+    };
+    im.onerror=function(){res('')};
+    im.src=dataUrl;
+  });
+}
+function send(){
+  if(sending)return;
+  var text=input.value.trim();
+  if(!text&&pendingImg===null)return;
+  input.value='';autoGrow();
+  var imgToSend=pendingImg,mimeToSend=pendingMime;
+  clearPreview();
+  // 用户气泡（图片立即显示，文本随后由回复流程展示——直接先显示）
+  var uh='';
+  if(imgToSend!==null)uh+='<img src="data:'+mimeToSend+';base64,'+imgToSend+'">';
+  if(text)uh+=(imgToSend!==null?'<br>':'')+md(text);
+  addMsg('user',uh||'<i>（图片）</i>');
+  histPush({r:'u',t:text||'',img:pendingImgSmall||'',ts:Date.now()});
+  addTyping();sending=true;sendBtn.disabled=true;
+  // 组装消息：有图先上传拿 file_id
+  var uploadP=imgToSend!==null?uploadImg(imgToSend,mimeToSend):Promise.resolve(null);
+  uploadP.then(function(fid){
+    var parts=[];
+    if(fid)parts.push({type:'image',file_id:fid});
+    if(text)parts.push({type:'text',text:text});
+    var conv=getConv();
+    var body={bot_id:BOT,user_id:did(),stream:false,additional_messages:[{role:'user',content_type:parts.length? 'object_string':'text',content:parts.length? JSON.stringify(parts):text}]};
+    if(conv)body.conversation_id=conv;   // 有本设备会话则续用，无则让服务端创建
+    return fetch(BASE+'/v3/chat',{method:'POST',headers:{'Authorization':'Bearer '+PAT,'Content-Type':'application/json'},body:JSON.stringify(body)})
+      .then(function(r){return r.json()})
+      .then(function(j){
+        if(j.code!==0||!j.data){throw new Error((j.msg||'chat 创建失败')+(j.code===4002?'：请检查 PAT':''));}
+        if(!getConv()&&j.data.conversation_id){setConv(j.data.conversation_id);toast('已为本设备建立独立会话')}   // 首次：记住本设备会话
+        return poll(j.data.conversation_id,j.data.id);
+      });
+  })
+  .then(function(reply){
+    rmTyping();addMsg('assistant',contentToHtml(reply));resolveImgs();
+    var ex=extractReply(reply);histPush({r:'a',t:ex.text,img:ex.img,ts:Date.now()});
+    sending=false;sendBtn.disabled=false;
+  })
+  .catch(function(e){
+    rmTyping();addMsg('assistant','⚠️ '+esc(e&&e.message?e.message:String(e)));
+    sending=false;sendBtn.disabled=false;
+  });
+}
+function poll(cid,chid){
+  return new Promise(function(resolve,reject){
+    var t0=Date.now();
+    (function step(){
+      fetch(BASE+'/v3/chat/retrieve?conversation_id='+encodeURIComponent(cid)+'&chat_id='+encodeURIComponent(chid),{headers:{'Authorization':'Bearer '+PAT}})
+        .then(function(r){return r.json()})
+        .then(function(j){
+          var st=j&&j.data&&j.data.status;
+          if(st==='completed')return resolve(fetchReply(cid,chid));
+          if(st==='failed')return reject(new Error('对话运行失败'));
+          if(Date.now()-t0>150000)return reject(new Error('对话超时，请重试'));
+          setTimeout(step,2000);
+        })
+        .catch(function(e){reject(e)});
+    })();
+  });
+}
+function fetchReply(cid,chid){
+  return fetch(BASE+'/v3/chat/message/list?conversation_id='+encodeURIComponent(cid)+'&chat_id='+encodeURIComponent(chid),{headers:{'Authorization':'Bearer '+PAT}})
+    .then(function(r){return r.json()})
+    .then(function(j){
+      var arr=j&&j.data||[];
+      var ans=[].concat(arr).reverse().find(function(m){return m&&m.type==='answer'&&m.role==='assistant'});
+      return ans?ans.content:'（无回复）';
+    });
+}
+// 图片选择与预览
+elFile.addEventListener('change',function(){
+  var f=elFile.files[0];if(!f)return;
+  if(!/^image\//.test(f.type)){toast('请选择图片');elFile.value='';return}
+  var rd=new FileReader();
+  rd.onload=function(){
+    var d=rd.result,semi=d.indexOf(';');
+    pendingMime=d.slice(5,semi);pendingImg=d.slice(d.indexOf(',')+1);
+    elPrevImg.src=d;elPreview.hidden=false;
+  };
+  rd.readAsDataURL(f);elFile.value='';
+});
+elPrevRemove.addEventListener('click',clearPreview);
+elPrevConfirm.addEventListener('click',function(){
+  elPreview.hidden=true;
+  pendingImgSmall='';
+  var d='data:'+pendingMime+';base64,'+pendingImg;
+  compressImg(d).then(function(s){pendingImgSmall=s;send()}).catch(function(){send()});
+});
+function clearPreview(){pendingImg=null;pendingMime=null;elPreview.hidden=true;elPrevImg.src=''}
+function autoGrow(){input.style.height='auto';input.style.height=Math.min(input.scrollHeight,110)+'px'}
+sendBtn.addEventListener('click',send);
+input.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}});
+input.addEventListener('input',autoGrow);
+loadHistory();
+</script>
+</body>
+</html>
