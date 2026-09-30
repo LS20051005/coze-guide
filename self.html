@@ -32,6 +32,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
 .input-bar{display:flex;align-items:center;gap:8px;padding:10px 12px 14px;border-top:2px solid #e0e6ec;background:#fff;flex-shrink:0}
 .btn-upload{display:flex;align-items:center;gap:5px;background:#fff;border:2px solid #1e6f50;color:#1e6f50;border-radius:12px;padding:10px 12px;cursor:pointer;flex-shrink:0;font-size:15px;font-weight:700}
 .btn-upload:active{background:#e8f3ec}
+.btn-clear{background:rgba(255,255,255,.2);border:2px solid rgba(255,255,255,.55);color:#fff;border-radius:12px;padding:9px 14px;font-size:15px;font-weight:700;cursor:pointer;flex-shrink:0}
+.btn-clear:hover{background:rgba(255,255,255,.35)}
+.btn-mic{background:#fff;border:2px solid #1e6f50;color:#1e6f50;border-radius:12px;width:46px;height:46px;font-size:20px;cursor:pointer;flex-shrink:0}
+.btn-mic.mic-on{background:#1e6f50;color:#fff;animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.6}}
+.del-btn{position:absolute;top:-8px;right:-8px;width:22px;height:22px;border-radius:50%;border:none;background:rgba(255,255,255,.9);color:#999;font-size:12px;cursor:pointer;display:none;align-items:center;justify-content:center;z-index:5}
+.msg:hover .del-btn{display:flex}
+.del-btn:hover{background:#fee2e2;color:#dc2626}
+.rd-btn{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;border:1px solid #1e6f50;background:#fff;color:#1e6f50;font-size:12px;cursor:pointer;margin-left:6px;flex-shrink:0}
+.rd-btn.rd-on{background:#1e6f50;color:#fff}
+.msg{position:relative}
 .input-wrap{flex:1;border:2px solid #c9d2dc;border-radius:14px;background:#f7f9fb;padding:6px 12px;display:flex;align-items:center}
 .input-wrap:focus-within{border-color:#1e6f50}
 #inputText{width:100%;border:none;outline:none;background:transparent;font-size:18px;font-family:inherit;resize:none;max-height:110px;line-height:1.6}
@@ -54,11 +65,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei
       <div class="bot-name">古建筑智能导游</div>
       <div class="bot-tag">自研版 · 各设备历史独立</div>
     </div>
+    <button class="btn-clear" id="btnClear" title="清空本设备对话">🗑 清空</button>
   </header>
   <main id="msgs" class="messages"></main>
   <footer class="input-bar">
     <label class="btn-upload" for="fileInput"><span>📷</span><span>照片</span></label>
     <input type="file" id="fileInput" accept="image/*" hidden>
+    <button class="btn-mic" id="btnMic" title="语音输入">🎤</button>
     <div class="input-wrap"><textarea id="inputText" rows="1" placeholder="打字提问…（可带照片）"></textarea></div>
     <button class="btn-send" id="btnSend">发送</button>
   </footer>
@@ -75,6 +88,7 @@ var BASE='https://api.coze.cn';
 var KEY='coze_conv_v2';                 // 本设备专属会话 ID（各设备互不共享）
 var msgs=document.getElementById('msgs'),input=document.getElementById('inputText'),sendBtn=document.getElementById('btnSend'),tip=document.getElementById('tip');
 var elFile=document.getElementById('fileInput'),elPreview=document.getElementById('imgPreview'),elPrevImg=document.getElementById('previewImg');
+var btnMic=document.getElementById('btnMic'),btnClear=document.getElementById('btnClear');
 var elPrevRemove=document.getElementById('previewRemove'),elPrevConfirm=document.getElementById('previewConfirm');
 var sending=false;
 var pendingImg=null,pendingMime=null,pendingImgSmall='';   // 待发送图片（原图base64 / mime / 压缩缓存图）
@@ -114,11 +128,59 @@ function md(s){
   return s;
 }
 
-function addMsg(role,html){
+function addMsg(role,html,histId){
   var w=document.createElement('div');w.className='msg '+role;
+  if(histId)w.setAttribute('data-hist',histId);
+  var del=document.createElement('button');del.className='del-btn';del.textContent='✕';del.title='删除此条';
+  del.addEventListener('click',function(){w.remove();if(histId)histDel(histId);});
   var b=document.createElement('div');b.className='bubble';b.innerHTML=html;
-  w.appendChild(b);msgs.appendChild(w);msgs.scrollTop=msgs.scrollHeight;
+  w.appendChild(del);
+  if(role==='assistant'){
+    var rd=document.createElement('button');rd.className='rd-btn';rd.textContent='🔊';rd.title='朗读';
+    rd.addEventListener('click',function(){speak(b.textContent,rd)});
+    w.appendChild(rd);
+  }
+  w.appendChild(b);
+  msgs.appendChild(w);msgs.scrollTop=msgs.scrollHeight;
 }
+// 朗读（浏览器中文语音；再点停止）
+function speak(text,btn){
+  if(window.__spkBtns&&window.__spkBtns.indexOf(btn)>-1){speechSynthesis.cancel();window.__spkBtns=[];btn.classList.remove('rd-on');return;}
+  if(window.__speaking){speechSynthesis.cancel();window.__speaking=false;}
+  document.querySelectorAll('.rd-on').forEach(function(x){x.classList.remove('rd-on')});
+  var u=new SpeechSynthesisUtterance(text);
+  u.lang='zh-CN';u.rate=1.0;
+  try{
+    var vs=window.speechSynthesis.getVoices(),zh=[];
+    for(var i=0;i<vs.length;i++){if(vs[i].lang&&vs[i].lang.toLowerCase().indexOf('zh')===0)zh.push(vs[i]);}
+    if(zh.length)u.voice=zh[zh.length-1];
+  }catch(e){}
+  u.onend=function(){window.__speaking=false;window.__spkBtns=[];if(btn)btn.classList.remove('rd-on')};
+  u.onerror=function(){window.__speaking=false;window.__spkBtns=[];if(btn)btn.classList.remove('rd-on')};
+  try{speechSynthesis.speak(u);window.__speaking=true;window.__spkBtns=[btn];if(btn)btn.classList.add('rd-on')}catch(e){toast('朗读失败')}
+}
+// 本地历史删除
+function histDel(id){var a=histGet().filter(function(x){return x.id!==id});try{localStorage.setItem(HIST,JSON.stringify(a))}catch(e){}}
+// 语音输入（浏览器中文识别）
+var _micRec=null;
+btnMic.addEventListener('click',function(){
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){toast('当前浏览器不支持语音输入');return;}
+  if(_micRec&&_micRec.__on){_micRec.stop();return;}
+  var r=new SR();_micRec=r;r.__on=1;
+  r.lang='zh-CN';r.interimResults=false;r.maxAlternatives=1;
+  r.onresult=function(e){var t=e.results[0][0].transcript;input.value=(input.value?input.value+' ':'')+t;autoGrow()};
+  r.onend=function(){_micRec=null;btnMic.classList.remove('mic-on')};
+  r.onerror=function(){_micRec=null;btnMic.classList.remove('mic-on');toast('语音识别失败，请重试')};
+  try{r.start();btnMic.classList.add('mic-on');toast('请说话…')}catch(e){btnMic.classList.remove('mic-on')}
+});
+// 清空本设备对话
+btnClear.addEventListener('click',function(){
+  if(!confirm('确定清空本设备的全部对话记录？'))return;
+  try{localStorage.removeItem(KEY)}catch(e){}
+  try{localStorage.removeItem(HIST)}catch(e){}
+  location.reload();
+});
 function addTyping(){var w=document.createElement('div');w.className='msg assistant';w.id='typing';w.innerHTML='<div class="bubble"><span class="typing"><span></span><span></span><span></span></span></div>';msgs.appendChild(w);msgs.scrollTop=msgs.scrollHeight}
 function rmTyping(){var t=document.getElementById('typing');if(t)t.remove()}
 
@@ -159,7 +221,7 @@ function loadHistory(){
     if(it.t)html=md(it.t);
     if(it.img)html+='<img src="'+it.img+'" alt="图片">';
     if(!html)html='<i>（图片）</i>';
-    addMsg(it.r==='u'?'user':'assistant',html);
+    addMsg(it.r==='u'?'user':'assistant',html,it.id);
   });
   var conv=getConv();
   if(!conv){diag('无本设备会话 → 显示开场白（本地历史已显示）');showOnboarding();return;}
@@ -261,8 +323,9 @@ function send(){
   var uh='';
   if(imgToSend!==null)uh+='<img src="data:'+mimeToSend+';base64,'+imgToSend+'">';
   if(text)uh+=(imgToSend!==null?'<br>':'')+md(text);
-  addMsg('user',uh||'<i>（图片）</i>');
-  histPush({r:'u',t:text||'',img:pendingImgSmall||'',ts:Date.now()});
+  var hIdU='h'+Date.now()+'_'+Math.floor(Math.random()*9999);
+  addMsg('user',uh||'<i>（图片）</i>',hIdU);
+  histPush({r:'u',t:text||'',img:pendingImgSmall||'',id:hIdU,ts:Date.now()});
   addTyping();sending=true;sendBtn.disabled=true;
   // 组装消息：有图先上传拿 file_id
   var uploadP=imgToSend!==null?uploadImg(imgToSend,mimeToSend):Promise.resolve(null);
@@ -282,8 +345,10 @@ function send(){
       });
   })
   .then(function(reply){
-    rmTyping();addMsg('assistant',contentToHtml(reply));resolveImgs();
-    var ex=extractReply(reply);histPush({r:'a',t:ex.text,img:ex.img,ts:Date.now()});
+    rmTyping();
+    var hIdA='h'+Date.now()+'_'+Math.floor(Math.random()*9999);
+    addMsg('assistant',contentToHtml(reply),hIdA);resolveImgs();
+    var ex=extractReply(reply);histPush({r:'a',t:ex.text,img:ex.img,id:hIdA,ts:Date.now()});
     sending=false;sendBtn.disabled=false;
   })
   .catch(function(e){
